@@ -29,15 +29,21 @@ import android.os.HandlerThread;
 import android.os.Vibrator;
 import android.util.Log;
 import android.util.Size;
+import android.util.SparseArray;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
+import android.speech.tts.TextToSpeech;
+import com.google.android.gms.vision.Frame;
+import com.google.android.gms.vision.barcode.Barcode;
+import com.google.android.gms.vision.barcode.BarcodeDetector;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
+import java.util.Locale;
 
 import static android.hardware.camera2.CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP;
 
@@ -56,6 +62,8 @@ public class MainActivity extends AppCompatActivity {
     RelativeLayout mainLayout;
     private int skipper = 0;
     private Bitmap bitmap;
+    private BarcodeDetector detector;
+    private TextToSpeech textToSpeech;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -79,6 +87,25 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         openBackgroundThread();
+        createBarcodeDetector();
+        textToSpeech = new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
+            @Override
+            public void onInit(int status) {
+                if (status == TextToSpeech.SUCCESS) {
+                    int ttsLang = textToSpeech.setLanguage(Locale.US);
+                    textToSpeech.setSpeechRate((float)0.6);
+                    if (ttsLang == TextToSpeech.LANG_MISSING_DATA
+                            || ttsLang == TextToSpeech.LANG_NOT_SUPPORTED) {
+                        Log.e("TTS", "The Language is not supported!");
+                    } else {
+                        Log.i("TTS", "Language Supported.");
+                    }
+                    Log.i("TTS", "Initialization success.");
+                } else {
+                    Toast.makeText(getApplicationContext(), "TTS Initialization failed!", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(this, Manifest.permission.VIBRATE) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this,
                     new String[]{Manifest.permission.CAMERA}, CAMERA_REQUEST);
@@ -88,6 +115,14 @@ public class MainActivity extends AppCompatActivity {
             setUpCamera();
         }
 
+    }
+
+    private void createBarcodeDetector() {
+        detector = new BarcodeDetector.Builder(getApplicationContext()).setBarcodeFormats(Barcode.QR_CODE).build();
+        if(!detector.isOperational()){
+            Toast.makeText(this, "Could not set up the detector!", Toast.LENGTH_SHORT).show();
+            createBarcodeDetector();
+        }
     }
 
     private void setUpCamera() {
@@ -176,38 +211,51 @@ public class MainActivity extends AppCompatActivity {
                                     if(skipper%10 == 9) {
 
                                         bitmap = textureView.getBitmap();
-                                        Vibrator vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
-                                        int color;
-                                        int accuracy = 20;
-                                        int width = bitmap.getWidth();
-                                        int height = bitmap.getHeight();
-                                        //int[] pixels = new int[width*height];
-                                        //bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
-                                        outer: for(int i=4;i<width-4;i=i+4)
-                                        {
-                                            for(int j=4;j<height-4;j=j+4)
-                                            {
-                                                 color = bitmap.getPixel(i,j);
-
-                                                 if((Color.green(color) - Color.red(color))>accuracy && (Color.green(color) - Color.blue(color))>accuracy)
-                                                 {
-                                                     //bitmap.setPixel(i,j, Color.BLUE);
-                                                         color = bitmap.getPixel(i+4,j+4);
-                                                         if((Color.blue(color) - Color.red(color))>accuracy && (Color.blue(color) - Color.green(color))>accuracy)
-                                                         {
-                                                             Log.d(TAG, "Wykryto krawedz G-B!");
-                                                             color = bitmap.getPixel(i-4, j+4);
-                                                             if((Color.red(color) - Color.green(color)>accuracy) && (Color.red(color) - Color.blue(color))>accuracy)
-                                                             {
-                                                                 vibrator.vibrate(300);
-                                                                 Log.d(TAG, "Wykryto znak!");
-                                                                 break outer;
-                                                             }
-                                                         }
-                                                 }
+                                        Frame frame = new Frame.Builder().setBitmap(bitmap).build();
+                                        SparseArray<Barcode> barcodes = detector.detect(frame);
+                                        if (barcodes.size() != 0) {
+                                            Barcode thisCode = barcodes.valueAt(0);
+                                            Toast.makeText(MainActivity.this, thisCode.rawValue, Toast.LENGTH_SHORT).show();
+                                            Log.d(TAG, "Barcode read: " + thisCode.displayValue);
+                                            if (!textToSpeech.isSpeaking()) {
+                                                textToSpeech.speak(thisCode.rawValue, TextToSpeech.QUEUE_FLUSH, null);
                                             }
+                                        } else {
+                                            Log.d(TAG, "No barcode captured, intent data is null");
+
+                                            Vibrator vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+                                            int color;
+                                            int accuracy = 20;
+                                            int width = bitmap.getWidth();
+                                            int height = bitmap.getHeight();
+                                            //int[] pixels = new int[width*height];
+                                            //bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
+                                            outer:
+                                            for (int i = 4; i < width - 4; i = i + 4) {
+                                                for (int j = 4; j < height - 4; j = j + 4) {
+                                                    color = bitmap.getPixel(i, j);
+
+                                                    if ((Color.green(color) - Color.red(color)) > accuracy && (Color.green(color) - Color.blue(color)) > accuracy) {
+                                                        //bitmap.setPixel(i,j, Color.BLUE);
+                                                        color = bitmap.getPixel(i + 4, j + 4);
+                                                        if ((Color.blue(color) - Color.red(color)) > accuracy && (Color.blue(color) - Color.green(color)) > accuracy) {
+                                                            Log.d(TAG, "detected G-B edge");
+                                                            color = bitmap.getPixel(i - 4, j + 4);
+                                                            if ((Color.red(color) - Color.green(color) > accuracy) && (Color.red(color) - Color.blue(color)) > accuracy) {
+                                                                vibrator.vibrate(300);
+                                                                Log.d(TAG, "sign detected");
+                                                                Toast.makeText(MainActivity.this, "Sign detected!", Toast.LENGTH_SHORT).show();
+                                                                if (!textToSpeech.isSpeaking()) {
+                                                                    textToSpeech.speak("Go straight", TextToSpeech.QUEUE_FLUSH, null);
+                                                                }
+                                                                break outer;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            //Log.d(TAG, "New image frame");
                                         }
-                                        //Log.d(TAG, "New image frame");
                                     }
                                     ++skipper;
                                 }
@@ -288,6 +336,10 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         stopBackgroundThread();
+        if (textToSpeech != null) {
+            textToSpeech.stop();
+            textToSpeech.shutdown();
+        }
     }
 
     @Override
