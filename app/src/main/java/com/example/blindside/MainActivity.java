@@ -225,7 +225,8 @@ public class MainActivity extends AppCompatActivity {
 
                                             Vibrator vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
                                             int color;
-                                            int accuracy = 20;
+                                            int accuracy = 12;
+                                            int window = 400;
                                             int width = bitmap.getWidth();
                                             int height = bitmap.getHeight();
                                             //int[] pixels = new int[width*height];
@@ -233,22 +234,24 @@ public class MainActivity extends AppCompatActivity {
                                             outer:
                                             for (int i = 4; i < width - 4; i = i + 4) {
                                                 for (int j = 4; j < height - 4; j = j + 4) {
-                                                    color = bitmap.getPixel(i, j);
+                                                    if(i>(width/2)-window && i<(width/2)+window && j>(height/2)-window && j<(height/2)+window) {
+                                                        color = bitmap.getPixel(i, j);
 
-                                                    if ((Color.green(color) - Color.red(color)) > accuracy && (Color.green(color) - Color.blue(color)) > accuracy) {
-                                                        //bitmap.setPixel(i,j, Color.BLUE);
-                                                        color = bitmap.getPixel(i + 4, j + 4);
-                                                        if ((Color.blue(color) - Color.red(color)) > accuracy && (Color.blue(color) - Color.green(color)) > accuracy) {
-                                                            Log.d(TAG, "detected G-B edge");
-                                                            color = bitmap.getPixel(i - 4, j + 4);
-                                                            if ((Color.red(color) - Color.green(color) > accuracy) && (Color.red(color) - Color.blue(color)) > accuracy) {
-                                                                vibrator.vibrate(300);
-                                                                Log.d(TAG, "sign detected");
-                                                                Toast.makeText(MainActivity.this, "Sign detected!", Toast.LENGTH_SHORT).show();
-                                                                if (!textToSpeech.isSpeaking()) {
-                                                                    textToSpeech.speak("Go straight", TextToSpeech.QUEUE_FLUSH, null);
+                                                        if ((Color.green(color) - Color.red(color)) > accuracy - 5 && (Color.green(color) - Color.blue(color)) > accuracy) {
+                                                            //bitmap.setPixel(i,j, Color.BLUE);
+                                                            color = bitmap.getPixel(i + 4, j + 4);
+                                                            if ((Color.blue(color) - Color.red(color)) > accuracy - 5 && (Color.blue(color) - Color.green(color)) > accuracy) {
+                                                                Log.d(TAG, "detected G-B edge");
+                                                                color = bitmap.getPixel(i - 4, j + 4);
+                                                                if ((Color.red(color) - Color.green(color) > accuracy) && (Color.red(color) - Color.blue(color)) > accuracy) {
+                                                                    vibrator.vibrate(300);
+                                                                    Log.d(TAG, "sign detected");
+                                                                    Toast.makeText(MainActivity.this, "Sign detected!", Toast.LENGTH_SHORT).show();
+                                                                    if (!textToSpeech.isSpeaking()) {
+                                                                        textToSpeech.speak("Go straight", TextToSpeech.QUEUE_FLUSH, null);
+                                                                    }
+                                                                    break outer;
                                                                 }
-                                                                break outer;
                                                             }
                                                         }
                                                     }

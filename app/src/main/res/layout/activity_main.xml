@@ -11,6 +11,17 @@
     <TextureView
         android:id="@+id/textureView"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content" />
+        android:layout_height="wrap_content"
+
+        />
+
+    <ImageView
+        android:id="@+id/imageFrame"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:src="@drawable/frame20"
+        android:layout_gravity="center"
+        android:scaleType="centerCrop"/>
+
 
 </RelativeLayout>
